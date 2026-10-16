@@ -21,6 +21,7 @@ pub mod poke_rips {
         config.refund_timeout_slots = refund_timeout_slots;
         config.paused = false;
         config.bump = ctx.bumps.config;
+        config.treasury_bump = ctx.bumps.treasury;
         config.total_rips = 0;
         config.total_volume_lamports = 0;
         Ok(())
@@ -41,8 +42,6 @@ pub mod poke_rips {
         Ok(())
     }
 
-    /// User pays SOL and creates an order.
-    /// Client/executor then requests ORAO VRF with seed = sha256(order_pubkey).
     pub fn create_order(
         ctx: Context<CreateOrder>,
         pack_id: u8,
@@ -54,6 +53,7 @@ pub mod poke_rips {
         require!(pack_id < 5, PokeError::InvalidPack);
         require!(price_lamports > 0, PokeError::InvalidPrice);
 
+        // Pay into treasury PDA
         system_program::transfer(
             CpiContext::new(
                 ctx.accounts.system_program.to_account_info(),
@@ -76,9 +76,6 @@ pub mod poke_rips {
         order.value_band = 0;
         order.created_slot = Clock::get()?.slot;
         order.bump = ctx.bumps.order;
-
-        // Optional: CPI into ORAO request_v2 here (see docs/RANDOMNESS.md).
-        // Current design: executor/client requests ORAO off-chain with the same seed.
 
         emit!(OrderCreated {
             order: order.key(),
@@ -121,6 +118,7 @@ pub mod poke_rips {
         Ok(())
     }
 
+    /// Refund SOL from treasury PDA if order still pending past timeout.
     pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
         let order = &mut ctx.accounts.order;
         let config = &ctx.accounts.config;
@@ -134,9 +132,22 @@ pub mod poke_rips {
             PokeError::RefundNotReady
         );
 
+        let amount = order.price_lamports;
         order.status = OrderStatus::Refunded as u8;
 
-        // TODO: transfer SOL from treasury PDA back to user
+        // Transfer from treasury PDA → user using signer seeds
+        let treasury_seeds: &[&[u8]] = &[b"treasury", &[config.treasury_bump]];
+        system_program::transfer(
+            CpiContext::new_with_signer(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.treasury.to_account_info(),
+                    to: ctx.accounts.user.to_account_info(),
+                },
+                &[treasury_seeds],
+            ),
+            amount,
+        )?;
 
         emit!(OrderRefunded {
             order: order.key(),
@@ -175,6 +186,7 @@ pub struct Config {
     pub total_volume_lamports: u64,
     pub top20: [Pubkey; 20],
     pub bump: u8,
+    pub treasury_bump: u8,
 }
 
 #[account]
@@ -203,13 +215,19 @@ pub struct InitializeConfig<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + 32 + 32 + 2 + 8 + 1 + 8 + 8 + (32 * 20) + 1,
+        space = 8 + 32 + 32 + 2 + 8 + 1 + 8 + 8 + (32 * 20) + 1 + 1,
         seeds = [b"config"],
         bump
     )]
     pub config: Account<'info, Config>,
-    /// CHECK: treasury receives pack payments
-    pub treasury: UncheckedAccount<'info>,
+    /// Treasury PDA holds pack payments and pays refunds
+    /// CHECK: PDA validated by seeds
+    #[account(
+        mut,
+        seeds = [b"treasury"],
+        bump
+    )]
+    pub treasury: SystemAccount<'info>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -244,9 +262,9 @@ pub struct CreateOrder<'info> {
     pub order: Account<'info, Order>,
     #[account(mut)]
     pub user: Signer<'info>,
-    /// CHECK: treasury receives payment
-    #[account(mut)]
-    pub treasury: UncheckedAccount<'info>,
+    /// CHECK: treasury PDA
+    #[account(mut, seeds = [b"treasury"], bump = config.treasury_bump)]
+    pub treasury: SystemAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -264,7 +282,12 @@ pub struct ClaimRefund<'info> {
     pub config: Account<'info, Config>,
     #[account(mut)]
     pub order: Account<'info, Order>,
+    #[account(mut)]
     pub user: Signer<'info>,
+    /// CHECK: treasury PDA signs refund
+    #[account(mut, seeds = [b"treasury"], bump = config.treasury_bump)]
+    pub treasury: SystemAccount<'info>,
+    pub system_program: Program<'info, System>,
 }
 
 #[event]

@@ -1,61 +1,35 @@
-# Poke Rips — Full Status
+# Poke Rips — Status
 
 **Updated**: 2026-10-16
 
-## Stack overview
+## Complete
 
-| Layer | Status |
-|-------|--------|
-| Frontend (Shop, Rip, Collection, Vote, Stats, Fair) | MVP done |
-| ORAO VRF (not Switchboard) | Helpers + process path done |
-| Jupiter swaps | Working module |
-| Token delivery to user ATA | Done |
-| Anchor fulfill + order poll | Code ready — needs IDL after build |
-| $POKE stake/vote | Skeleton + docs |
-| Pack art / logo | Pending |
-| Mainnet | Not started |
+| Area | Detail |
+|------|--------|
+| Frontend | Shop, Rip modal, Collection, Vote, Stats, Fair, mobile nav |
+| Contract | create/fulfill/refund, treasury PDA, vrf_seed, payments |
+| Randomness | ORAO VRF (Switchboard dead) |
+| Executor | ORAO + Jupiter + ATA transfer + order poll + fulfill RPC |
+| Stake/Vote | Skeleton + docs |
+| Docs | Brand, tokenomics, architecture, marketing, go-live |
 
-## Repo layout
-```
-poke-rips/
-├── frontend/          Next.js app
-├── programs/          Anchor (orders + stake skeleton)
-├── executor/
-│   ├── src/
-│   │   ├── index.ts     main loop
-│   │   ├── orao.ts      VRF
-│   │   ├── jupiter.ts   swaps
-│   │   ├── tokens.ts    ATA + transfer
-│   │   └── program.ts   Anchor client
-│   └── idl/             place poke_rips.json here after build
-└── docs/
-```
+## Your actions
 
-## Run frontend
+1. `anchor build` → deploy → copy IDL
+2. Fund executor wallet
+3. Set Top 20 mints
+4. E2E on devnet
+5. Optional: generate final pack PNGs / logo for `/assets`
+6. Mainnet when ready (see `docs/GO_LIVE.md`)
+
+## Run
+
 ```bash
-cd frontend && npm install && npm run dev
+# Frontend
+cd frontend && npm i && npm run dev
+
+# Executor
+cd executor && cp .env.example .env && npm i && npm run dev
 ```
 
-## Run executor
-```bash
-cd executor
-cp .env.example .env
-npm install
-npm run dev
-```
-
-After `anchor build && anchor deploy`:
-```bash
-cp ../target/idl/poke_rips.json ./idl/
-# set PROGRAM_ID in .env
-```
-
-## Settlement path (live)
-```
-create_order (pay SOL, store vrf_seed)
-  → ORAO request(seed)
-  → waitFulfilled
-  → fulfill_order(32 bytes)
-  → Jupiter SOL→token
-  → transfer tokens → user ATA
-```
+Repo: https://github.com/spanda6z/poke-rips
