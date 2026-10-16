@@ -2,79 +2,42 @@
 
 **Rip packs. Catch real bags.**
 
-Solana pack-ripping dApp inspired by TokenRips, themed with Pokémon energy. Users buy packs with SOL, rip them, and receive real Solana tokens delivered to their wallet. The community votes which tokens enter the prize pool using `$POKE`.
+Solana pack-ripping dApp. Buy a pack with SOL, rip it, pull real tokens delivered to your wallet. Stake `$POKE` to vote coins into the prize pool and boost odds.
 
-## Live Links
-- **App**: TBA (Vercel)
-- **Twitter**: TBA
-- **Token CA**: TBA
-- **Repo**: https://github.com/spanda6z/poke-rips
+## Stack
+- **Frontend**: Next.js, Tailwind, Framer Motion, Wallet Adapter
+- **Randomness**: ORAO VRF (Switchboard shut down Sept 2026)
+- **Swaps**: Jupiter
+- **On-chain**: Anchor
+- **Executor**: Node settlement service
 
-## Features
-- Multiple pack tiers (Micro → Whale)
-- Provably fair randomness (Switchboard VRF)
-- On-chain orders + Jupiter market buys
-- `$POKE` for voting + odds boosts
-- Card collection + rarity system
-- Full fairness / transparency page
-
-## Tech Stack
-| Layer        | Stack                                      |
-|--------------|--------------------------------------------|
-| Frontend     | Next.js 14, Tailwind, Framer Motion, Wallet Adapter |
-| On-chain     | Anchor, Switchboard VRF, Pyth              |
-| Executor     | Node.js + Jupiter                          |
-| Hosting      | Vercel (frontend) + Railway (executor)     |
-
-## Project Structure
-```
-poke-rips/
-├── frontend/          # Next.js app
-├── programs/          # Anchor smart contracts
-├── executor/          # Settlement service
-├── docs/              # Architecture, tokenomics, brand
-└── assets/            # Brand assets
-```
-
-## Quick Start
+## Quick start
 
 ### Frontend
 ```bash
-cd frontend
-npm install
-npm run dev
+cd frontend && npm install && npm run dev
 ```
 
 ### Executor
 ```bash
-cd executor
-cp .env.example .env
-npm install
-npm run dev
+cd executor && cp .env.example .env && npm install && npm run dev
 ```
 
-### Smart Contract
+### Program
 ```bash
-cd programs
-anchor build
-anchor keys list          # update declare_id!
-anchor deploy --provider.cluster devnet
+cd programs && anchor build && anchor keys list
+# update declare_id!, rebuild, deploy
+cp target/idl/poke_rips.json ../executor/idl/
 ```
 
-## Documentation
-- [Brand Kit](docs/BRAND.md)
+## Docs
+- [Status](docs/STATUS.md)
+- [Randomness (ORAO)](docs/RANDOMNESS.md)
+- [Smart contract](docs/SMART_CONTRACT.md)
+- [Stake + Vote](docs/STAKE_VOTE.md)
 - [Tokenomics](docs/TOKENOMICS.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Smart Contract](docs/SMART_CONTRACT.md)
-- [Next Steps](docs/NEXT_STEPS.md)
-- [Marketing Copy](docs/MARKETING.md)
+- [Marketing](docs/MARKETING.md)
 - [Deployment](docs/DEPLOYMENT.md)
 
-## Current Status
-- Frontend MVP with rip animation: **Done**
-- Smart contract core logic: **Done**
-- Executor skeleton: **Done**
-- Real VRF + Jupiter integration: **In progress**
-- Final visuals + token launch: **Pending**
-
-Built for rapid iteration.
+## License
+MIT

@@ -1,29 +1,61 @@
-# Poke Rips — Status
+# Poke Rips — Full Status
 
 **Updated**: 2026-10-16
 
-## Randomness + Swaps
-| Piece | Status |
-|-------|--------|
-| Switchboard | Deprecated (shutdown) |
-| ORAO VRF helpers | Done (`executor/src/orao.ts`) |
-| Seed = sha256(order) | Done |
-| `vrf_seed` on Order | Done |
-| Jupiter swap module | Done |
-| Auto processOrder path | Done (needs live IDL + order fetch) |
+## Stack overview
 
-## How to test ORAO + Jupiter locally
+| Layer | Status |
+|-------|--------|
+| Frontend (Shop, Rip, Collection, Vote, Stats, Fair) | MVP done |
+| ORAO VRF (not Switchboard) | Helpers + process path done |
+| Jupiter swaps | Working module |
+| Token delivery to user ATA | Done |
+| Anchor fulfill + order poll | Code ready — needs IDL after build |
+| $POKE stake/vote | Skeleton + docs |
+| Pack art / logo | Pending |
+| Mainnet | Not started |
+
+## Repo layout
+```
+poke-rips/
+├── frontend/          Next.js app
+├── programs/          Anchor (orders + stake skeleton)
+├── executor/
+│   ├── src/
+│   │   ├── index.ts     main loop
+│   │   ├── orao.ts      VRF
+│   │   ├── jupiter.ts   swaps
+│   │   ├── tokens.ts    ATA + transfer
+│   │   └── program.ts   Anchor client
+│   └── idl/             place poke_rips.json here after build
+└── docs/
+```
+
+## Run frontend
+```bash
+cd frontend && npm install && npm run dev
+```
+
+## Run executor
 ```bash
 cd executor
 cp .env.example .env
-# set EXECUTOR_SECRET_KEY + RPC_URL (devnet with SOL)
 npm install
 npm run dev
 ```
 
-Uncomment the demo `processOrder` call in `index.ts` to exercise request → wait → settle.
-
-## Frontend
+After `anchor build && anchor deploy`:
 ```bash
-cd frontend && npm install && npm run dev
+cp ../target/idl/poke_rips.json ./idl/
+# set PROGRAM_ID in .env
+```
+
+## Settlement path (live)
+```
+create_order (pay SOL, store vrf_seed)
+  → ORAO request(seed)
+  → waitFulfilled
+  → fulfill_order(32 bytes)
+  → Jupiter SOL→token
+  → transfer tokens → user ATA
 ```

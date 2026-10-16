@@ -3,19 +3,21 @@
 ## Completed
 - [x] Brand, tokenomics, architecture, marketing
 - [x] Frontend MVP + rip animation + mobile nav
-- [x] Smart contract core (payments, fulfill, refund, vrf_seed)
-- [x] Pivot to ORAO VRF
-- [x] Jupiter quote + swap helpers
-- [x] ORAO request / wait / seed helpers in executor
-- [x] processOrder path (request → wait → derive → settle)
+- [x] Smart contract core + vrf_seed
+- [x] ORAO VRF helpers + processOrder path
+- [x] Jupiter quote + swap
+- [x] Token ATA ensure + transfer to user
+- [x] Anchor program client + pending order fetch
+- [x] Stake/vote account skeleton + docs
 
-## Remaining
-- [ ] Wire Anchor IDL in executor → real `fulfill_order` RPC
-- [ ] `getProgramAccounts` for Pending orders
-- [ ] Transfer swapped tokens to user ATA
-- [ ] Optional: ORAO CPI inside `create_order`
-- [ ] Treasury as PDA
-- [ ] $POKE stake + vote
-- [ ] Final pack art + logo
-- [ ] Devnet E2E test
-- [ ] Mainnet + token launch
+## Before mainnet
+- [ ] `anchor build` → copy IDL to `executor/idl/poke_rips.json`
+- [ ] Deploy program + initialize_config
+- [ ] Fund executor with SOL for swaps + ORAO fees
+- [ ] Set real Top 20 mints
+- [ ] Devnet E2E: create_order → ORAO → fulfill → Jupiter → user ATA
+- [ ] Restrict fulfill_order to executor pubkey
+- [ ] Treasury as PDA for refunds
+- [ ] Implement stake_poke / cast_vote with real $POKE mint
+- [ ] Final pack art + logo SVG
+- [ ] Mainnet deploy + token launch
