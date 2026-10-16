@@ -140,9 +140,8 @@ pub mod poke_rips {
 
         order.status = OrderStatus::Refunded as u8;
 
-        // Transfer SOL back from treasury to user
-        // In production use a PDA treasury with signer seeds
-        **Note**: simplified — real implementation needs treasury as PDA
+        // TODO: Transfer SOL back from treasury PDA to user.
+        // Real implementation needs treasury as a PDA with signer seeds.
 
         emit!(OrderRefunded {
             order: order.key(),
