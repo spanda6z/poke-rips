@@ -19,14 +19,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Solana CLI
-        run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
-          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
 
-      # Pin Rust — newer toolchains break time 0.3.x used by anchor 0.30.1
-      - name: Install Rust 1.78.0
-        uses: dtolnay/rust-toolchain@1.78.0
+      # Pin Solana to 1.18.x — matches Anchor 0.30 and avoids SBF tool mismatches
+      - name: Install Solana 1.18.26
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/v1.18.26/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          solana --version
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -36,43 +43,63 @@ jobs:
             ~/.cargo/git
             ~/.cargo/bin
             target
-          key: ${{ runner.os }}-cargo-anchor0301-${{ hashFiles('**/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-sbf-v2-${{ hashFiles('**/Cargo.toml') }}
 
-      - name: Install Anchor 0.30.1 via avm
+      # Prefer npm binary; fall back to cargo install without --locked
+      - name: Install Anchor CLI
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor --tag v0.30.1 avm --locked --force
-          avm install 0.30.1
-          avm use 0.30.1
-          echo "$HOME/.avm/bin" >> $GITHUB_PATH
-          export PATH="$HOME/.avm/bin:$PATH"
+          set -e
+          if npm install -g @coral-xyz/anchor-cli@0.30.1 2>/dev/null; then
+            echo "Installed anchor via npm"
+            which anchor || true
+            anchor --version || true
+          fi
+          if ! command -v anchor >/dev/null 2>&1; then
+            echo "npm package missing — cargo install anchor-cli"
+            cargo install --git https://github.com/coral-xyz/anchor --tag v0.30.1 anchor-cli --force
+          fi
+          export PATH="$HOME/.cargo/bin:$PATH"
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           anchor --version
 
-      - name: Setup wallet from secret
+      - name: Setup wallet
         env:
           DEPLOYER_KEY: ${{ secrets.SOLANA_DEPLOYER_KEY }}
         run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           mkdir -p ~/.config/solana
           if [ -z "$DEPLOYER_KEY" ]; then
-            echo "No SOLANA_DEPLOYER_KEY secret — generating ephemeral keypair"
+            echo "No SOLANA_DEPLOYER_KEY — ephemeral keypair"
             solana-keygen new --no-bip39-passphrase -o ~/.config/solana/id.json --force
           else
             echo "$DEPLOYER_KEY" > ~/.config/solana/id.json
           fi
           solana config set --url https://api.devnet.solana.com
-          echo "Deployer address: $(solana address)"
+          echo "Deployer: $(solana address)"
           solana balance || true
 
-      - name: Airdrop (optional)
+      - name: Airdrop
         if: ${{ inputs.airdrop }}
         run: |
-          solana airdrop 2 || solana airdrop 1 || true
-          sleep 5
-          solana airdrop 2 || true
-          echo "Balance: $(solana balance)"
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          for i in 1 2 3 4 5; do
+            solana airdrop 2 && break
+            echo "Airdrop attempt $i failed, retry..."
+            sleep 8
+          done
+          solana balance
 
-      - name: Build
+      - name: Pin crates + build
         run: |
-          export PATH="$HOME/.avm/bin:$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          set -e
+          export PATH="$HOME/.cargo/bin:$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          # Generate lockfile on modern cargo, then pin pre-edition2024 crates
+          cargo generate-lockfile || true
+          cargo update -p block-buffer --precise 0.10.4 2>/dev/null || true
+          cargo update -p crypto-common --precise 0.1.6 2>/dev/null || true
+          cargo update -p digest --precise 0.10.7 2>/dev/null || true
+          cargo update -p sha2 --precise 0.10.8 2>/dev/null || true
+          cargo update -p time --precise 0.3.36 2>/dev/null || true
           anchor build
 
       - name: Sync program id
@@ -86,19 +113,18 @@ jobs:
 
       - name: Rebuild with real id
         run: |
-          export PATH="$HOME/.avm/bin:$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          export PATH="$HOME/.cargo/bin:$HOME/.local/share/solana/install/active_release/bin:$PATH"
           anchor build
 
       - name: Deploy to devnet
         run: |
-          export PATH="$HOME/.avm/bin:$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          # Fail clearly if no SOL
-          BAL=$(solana balance | awk '{print $1}')
-          echo "Balance before deploy: $BAL SOL"
+          export PATH="$HOME/.cargo/bin:$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          echo "Balance: $(solana balance)"
           anchor deploy --provider.cluster devnet
           echo "Deployed: $PROGRAM_ID"
 
       - name: Upload IDL artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: poke-rips-idl
@@ -107,8 +133,9 @@ jobs:
             target/deploy/poke_rips-keypair.json
 
       - name: Summary
+        if: always()
         run: |
-          echo "### Deploy complete" >> $GITHUB_STEP_SUMMARY
-          echo "**Program ID:** \`$PROGRAM_ID\`" >> $GITHUB_STEP_SUMMARY
+          echo "### Deploy run" >> $GITHUB_STEP_SUMMARY
+          echo "**Program ID:** \`${PROGRAM_ID:-unknown}\`" >> $GITHUB_STEP_SUMMARY
           echo "**Cluster:** devnet" >> $GITHUB_STEP_SUMMARY
-          echo "**Deployer:** $(solana address)" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployer:** $(solana address 2>/dev/null || echo n/a)" >> $GITHUB_STEP_SUMMARY
