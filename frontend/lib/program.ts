@@ -36,6 +36,9 @@ export function packPriceLamports(packId: string): number {
 /** Derive vrf_seed = sha256(order_pubkey) — matches executor */
 export async function deriveVrfSeed(orderPubkey: PublicKey): Promise<Uint8Array> {
   const data = orderPubkey.toBytes();
-  const hash = await crypto.subtle.digest("SHA-256", data);
+  // Copy into a fresh ArrayBuffer-backed view for Web Crypto TypeScript definitions.
+  const digestInput = new Uint8Array(data.byteLength);
+  digestInput.set(data);
+  const hash = await crypto.subtle.digest("SHA-256", digestInput.buffer);
   return new Uint8Array(hash);
 }
