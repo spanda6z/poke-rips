@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { WalletContextProvider } from "@/components/WalletProvider";
+import { MobileNav } from "@/components/MobileNav";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -17,9 +18,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-poke-bg text-white min-h-screen`}>
+      <body className={`${inter.className} bg-poke-bg text-white min-h-screen pb-20 md:pb-0`}>
         <WalletContextProvider>
           {children}
+          <MobileNav />
         </WalletContextProvider>
       </body>
     </html>

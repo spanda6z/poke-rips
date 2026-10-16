@@ -2,14 +2,15 @@
 
 ## Priority Order
 
-### 1. Frontend Polish (current focus)
+### 1. Frontend Polish
 - [x] Basic Shop + Pack cards
 - [x] Navbar + Wallet
-- [x] Collection / Vote / Stats / Fair pages (stubs)
-- [ ] Rip animation (Framer Motion)
+- [x] Collection / Vote / Stats / Fair pages
+- [x] Rip animation + card reveal modal
+- [x] Mobile bottom nav
+- [x] Demo collection cards + vote board
 - [ ] Real pack artwork integration
-- [ ] Card reveal animation
-- [ ] Mobile bottom nav
+- [ ] Polish animations further
 
 ### 2. Smart Contract
 - [x] Config + Order accounts
