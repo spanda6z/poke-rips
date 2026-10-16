@@ -1,18 +1,16 @@
 /**
- * Poke Rips Executor Service
+ * Poke Rips Executor
  *
- * Responsibilities:
- * 1. Watch for new OrderCreated events / accounts
- * 2. Wait until VRF randomness is available
- * 3. Call fulfill_order on the program
- * 4. Perform Jupiter swap for the winning token
- * 5. Transfer tokens to the user
- * 6. Handle edge cases & refunds
- *
- * This is a skeleton. Wire up real Switchboard + Jupiter next.
+ * Full settlement flow (skeleton with clear next steps):
+ * 1. Detect Pending orders
+ * 2. Wait for VRF randomness
+ * 3. Call fulfill_order
+ * 4. Calculate prize amount from pack range + value_band
+ * 5. Jupiter swap SOL → winning token
+ * 6. Transfer tokens to user
  */
 
-import { Connection, Keypair, PublicKey } from "@solana/web3.js";
+import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
 import * as dotenv from "dotenv";
 
 dotenv.config();
@@ -22,43 +20,57 @@ const PROGRAM_ID = new PublicKey(
   process.env.PROGRAM_ID || "PokeRips11111111111111111111111111111111111"
 );
 
+const PACK_RANGES: Record<number, { min: number; max: number }> = {
+  0: { min: 1, max: 100 },      // Micro
+  1: { min: 5, max: 250 },      // Mini
+  2: { min: 10, max: 500 },     // Starter
+  3: { min: 25, max: 1500 },    // Degen
+  4: { min: 100, max: 10000 },  // Whale
+};
+
 const connection = new Connection(RPC_URL, "confirmed");
 
-// Load executor keypair from env (base58 or file path)
 function loadKeypair(): Keypair {
   const secret = process.env.EXECUTOR_SECRET_KEY;
   if (!secret) {
-    console.warn("No EXECUTOR_SECRET_KEY set — running in dry-run mode");
+    console.warn("No EXECUTOR_SECRET_KEY — dry-run mode");
     return Keypair.generate();
   }
-  // Expect JSON array string for now
-  const parsed = JSON.parse(secret);
-  return Keypair.fromSecretKey(Uint8Array.from(parsed));
+  return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secret)));
 }
 
 const executor = loadKeypair();
 
-console.log("Poke Rips Executor starting...");
-console.log("RPC:", RPC_URL);
-console.log("Program:", PROGRAM_ID.toBase58());
-console.log("Executor:", executor.publicKey.toBase58());
+function calculatePrizeUsd(packId: number, valueBand: number): number {
+  const range = PACK_RANGES[packId] || PACK_RANGES[0];
+  // valueBand 0-99 maps linearly across the range for now
+  const t = valueBand / 99;
+  return range.min + t * (range.max - range.min);
+}
 
 async function pollOrders() {
-  // TODO:
-  // 1. Fetch all Order accounts with status = Pending
-  // 2. For each, check if VRF randomness is ready
-  // 3. Call fulfill_order with the random bytes
-  // 4. Read the resulting rarity + token_index + value_band
-  // 5. Calculate exact token amount from pack range + value_band
-  // 6. Execute Jupiter swap (SOL → winning token)
-  // 7. Transfer tokens to order.user
-  // 8. Mark internal state as delivered
+  console.log("[poll] Scanning for pending orders...");
 
-  console.log("[poll] Checking for pending orders...");
+  // TODO implementation steps:
+  // 1. getProgramAccounts filtered by Order discriminator + status = Pending
+  // 2. For each order, check associated VRF account for revealed randomness
+  // 3. program.methods.fulfillOrder(Array.from(randomBytes)).accounts({...}).rpc()
+  // 4. Read order.rarity, order.token_index, order.value_band
+  // 5. Look up token mint from on-chain top20[token_index]
+  // 6. const usdValue = calculatePrizeUsd(order.pack_id, order.value_band)
+  // 7. Fetch Jupiter quote for usdValue worth of the token
+  // 8. Execute swap
+  // 9. Transfer resulting tokens to order.user
+  // 10. Log success + emit metrics
 }
 
 async function main() {
-  // Simple polling loop — replace with websocket / accountSubscribe later
+  console.log("Poke Rips Executor");
+  console.log("RPC      :", RPC_URL);
+  console.log("Program  :", PROGRAM_ID.toBase58());
+  console.log("Executor :", executor.publicKey.toBase58());
+  console.log("---");
+
   setInterval(async () => {
     try {
       await pollOrders();
@@ -66,8 +78,6 @@ async function main() {
       console.error("Poll error:", err);
     }
   }, 8_000);
-
-  console.log("Executor is running. Press Ctrl+C to stop.");
 }
 
 main().catch(console.error);

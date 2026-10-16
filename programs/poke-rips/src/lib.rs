@@ -1,4 +1,5 @@
 use anchor_lang::prelude::*;
+use anchor_lang::system_program;
 
 declare_id!("PokeRips11111111111111111111111111111111111"); // replace after anchor keys list
 
@@ -11,13 +12,17 @@ pub mod poke_rips {
         fee_bps: u16,
         refund_timeout_slots: u64,
     ) -> Result<()> {
+        require!(fee_bps <= 1000, PokeError::InvalidFee); // max 10%
+
         let config = &mut ctx.accounts.config;
         config.authority = ctx.accounts.authority.key();
+        config.treasury = ctx.accounts.treasury.key();
         config.fee_bps = fee_bps;
         config.refund_timeout_slots = refund_timeout_slots;
         config.paused = false;
         config.bump = ctx.bumps.config;
         config.total_rips = 0;
+        config.total_volume_lamports = 0;
         Ok(())
     }
 
@@ -36,16 +41,41 @@ pub mod poke_rips {
         Ok(())
     }
 
-    /// Creates a new order and prepares for VRF request.
-    /// In production this will also CPI into Switchboard to request randomness.
-    pub fn create_order(ctx: Context<CreateOrder>, pack_id: u8) -> Result<()> {
+    /// User pays SOL for a pack and creates an order.
+    /// Price is passed from the client (should be validated against Pyth in production).
+    pub fn create_order(
+        ctx: Context<CreateOrder>,
+        pack_id: u8,
+        price_lamports: u64,
+    ) -> Result<()> {
         let config = &ctx.accounts.config;
         require!(!config.paused, PokeError::Paused);
         require!(pack_id < 5, PokeError::InvalidPack);
+        require!(price_lamports > 0, PokeError::InvalidPrice);
+
+        // Transfer SOL from user to treasury
+        let fee = price_lamports
+            .checked_mul(config.fee_bps as u64)
+            .unwrap()
+            .checked_div(10_000)
+            .unwrap();
+        let _net = price_lamports.checked_sub(fee).unwrap();
+
+        system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                system_program::Transfer {
+                    from: ctx.accounts.user.to_account_info(),
+                    to: ctx.accounts.treasury.to_account_info(),
+                },
+            ),
+            price_lamports,
+        )?;
 
         let order = &mut ctx.accounts.order;
         order.user = ctx.accounts.user.key();
         order.pack_id = pack_id;
+        order.price_lamports = price_lamports;
         order.status = OrderStatus::Pending as u8;
         order.rarity = 0;
         order.token_index = 0;
@@ -53,32 +83,25 @@ pub mod poke_rips {
         order.created_slot = Clock::get()?.slot;
         order.bump = ctx.bumps.order;
 
-        // TODO: Switchboard VRF request CPI goes here
-        // 1. Create / use a randomness account
-        // 2. Request randomness with callback to fulfill_order
+        // TODO: Switchboard VRF request CPI
 
         emit!(OrderCreated {
             order: order.key(),
             user: order.user,
             pack_id,
+            price_lamports,
         });
 
         Ok(())
     }
 
-    /// Called after VRF reveal (by executor or as VRF callback).
-    /// Takes the random bytes and derives rarity + token + value band.
-    pub fn fulfill_order(
-        ctx: Context<FulfillOrder>,
-        random_bytes: [u8; 32],
-    ) -> Result<()> {
+    pub fn fulfill_order(ctx: Context<FulfillOrder>, random_bytes: [u8; 32]) -> Result<()> {
         let order = &mut ctx.accounts.order;
         require!(order.status == OrderStatus::Pending as u8, PokeError::InvalidStatus);
 
-        // Derive values from randomness
         let rarity = derive_rarity(&random_bytes);
         let token_index = (random_bytes[8] % 20) as u8;
-        let value_band = random_bytes[9] % 100; // 0-99 scale inside the pack range
+        let value_band = random_bytes[9] % 100;
 
         order.rarity = rarity;
         order.token_index = token_index;
@@ -86,7 +109,10 @@ pub mod poke_rips {
         order.status = OrderStatus::Fulfilled as u8;
 
         let config = &mut ctx.accounts.config;
-        config.total_rips = config.total_rips.checked_add(1).unwrap();
+        config.total_rips = config.total_rips.saturating_add(1);
+        config.total_volume_lamports = config
+            .total_volume_lamports
+            .saturating_add(order.price_lamports);
 
         emit!(OrderFulfilled {
             order: order.key(),
@@ -99,7 +125,6 @@ pub mod poke_rips {
         Ok(())
     }
 
-    /// User can claim refund if order is still Pending after timeout.
     pub fn claim_refund(ctx: Context<ClaimRefund>) -> Result<()> {
         let order = &mut ctx.accounts.order;
         let config = &ctx.accounts.config;
@@ -115,7 +140,9 @@ pub mod poke_rips {
 
         order.status = OrderStatus::Refunded as u8;
 
-        // TODO: transfer SOL back to user
+        // Transfer SOL back from treasury to user
+        // In production use a PDA treasury with signer seeds
+        **Note**: simplified — real implementation needs treasury as PDA
 
         emit!(OrderRefunded {
             order: order.key(),
@@ -126,37 +153,32 @@ pub mod poke_rips {
     }
 }
 
-// ─── Helpers ───────────────────────────────────────────────
-
 fn derive_rarity(random: &[u8; 32]) -> u8 {
-    // Simple weighted rarity from first two bytes
     let roll = u16::from_le_bytes([random[0], random[1]]) % 1000;
-
-    // Common 55%, Uncommon 25%, Rare 12%, Ultra 6%, Secret 1.8%, Legendary 0.2%
     if roll < 550 {
-        0 // Common
+        0
     } else if roll < 800 {
-        1 // Uncommon
+        1
     } else if roll < 920 {
-        2 // Rare
+        2
     } else if roll < 980 {
-        3 // Ultra Rare
+        3
     } else if roll < 998 {
-        4 // Secret Rare
+        4
     } else {
-        5 // Legendary
+        5
     }
 }
-
-// ─── Accounts ──────────────────────────────────────────────
 
 #[account]
 pub struct Config {
     pub authority: Pubkey,
+    pub treasury: Pubkey,
     pub fee_bps: u16,
     pub refund_timeout_slots: u64,
     pub paused: bool,
     pub total_rips: u64,
+    pub total_volume_lamports: u64,
     pub top20: [Pubkey; 20],
     pub bump: u8,
 }
@@ -165,6 +187,7 @@ pub struct Config {
 pub struct Order {
     pub user: Pubkey,
     pub pack_id: u8,
+    pub price_lamports: u64,
     pub status: u8,
     pub rarity: u8,
     pub token_index: u8,
@@ -180,18 +203,18 @@ pub enum OrderStatus {
     Refunded = 2,
 }
 
-// ─── Contexts ──────────────────────────────────────────────
-
 #[derive(Accounts)]
 pub struct InitializeConfig<'info> {
     #[account(
         init,
         payer = authority,
-        space = 8 + 32 + 2 + 8 + 1 + 8 + (32 * 20) + 1,
+        space = 8 + 32 + 32 + 2 + 8 + 1 + 8 + 8 + (32 * 20) + 1,
         seeds = [b"config"],
         bump
     )]
     pub config: Account<'info, Config>,
+    /// CHECK: treasury wallet that receives pack payments
+    pub treasury: UncheckedAccount<'info>,
     #[account(mut)]
     pub authority: Signer<'info>,
     pub system_program: Program<'info, System>,
@@ -219,13 +242,16 @@ pub struct CreateOrder<'info> {
     #[account(
         init,
         payer = user,
-        space = 8 + 32 + 1 + 1 + 1 + 1 + 1 + 8 + 1,
+        space = 8 + 32 + 1 + 8 + 1 + 1 + 1 + 1 + 8 + 1,
         seeds = [b"order", user.key().as_ref(), &pack_id.to_le_bytes()],
         bump
     )]
     pub order: Account<'info, Order>,
     #[account(mut)]
     pub user: Signer<'info>,
+    /// CHECK: treasury receives payment
+    #[account(mut)]
+    pub treasury: UncheckedAccount<'info>,
     pub system_program: Program<'info, System>,
 }
 
@@ -235,7 +261,6 @@ pub struct FulfillOrder<'info> {
     pub config: Account<'info, Config>,
     #[account(mut)]
     pub order: Account<'info, Order>,
-    // In production: add Switchboard randomness account here
 }
 
 #[derive(Accounts)]
@@ -247,13 +272,12 @@ pub struct ClaimRefund<'info> {
     pub user: Signer<'info>,
 }
 
-// ─── Events ────────────────────────────────────────────────
-
 #[event]
 pub struct OrderCreated {
     pub order: Pubkey,
     pub user: Pubkey,
     pub pack_id: u8,
+    pub price_lamports: u64,
 }
 
 #[event]
@@ -271,8 +295,6 @@ pub struct OrderRefunded {
     pub user: Pubkey,
 }
 
-// ─── Errors ────────────────────────────────────────────────
-
 #[error_code]
 pub enum PokeError {
     #[msg("Protocol is paused")]
@@ -283,4 +305,8 @@ pub enum PokeError {
     InvalidStatus,
     #[msg("Refund timeout not reached")]
     RefundNotReady,
+    #[msg("Invalid fee")]
+    InvalidFee,
+    #[msg("Invalid price")]
+    InvalidPrice,
 }

@@ -2,51 +2,79 @@
 
 **Rip packs. Catch real bags.**
 
-Poke Rips is a Solana pack-ripping dApp inspired by TokenRips, themed around Pokémon energy. Users buy packs with SOL, rip them, and receive real Solana tokens delivered straight to their wallet. Community votes which tokens go into the prize pool using the platform token `$POKE`.
+Solana pack-ripping dApp inspired by TokenRips, themed with Pokémon energy. Users buy packs with SOL, rip them, and receive real Solana tokens delivered to their wallet. The community votes which tokens enter the prize pool using `$POKE`.
 
-## Live Links (to be filled)
-- App: TBA
-- Twitter: TBA
-- Token CA: TBA
+## Live Links
+- **App**: TBA (Vercel)
+- **Twitter**: TBA
+- **Token CA**: TBA
+- **Repo**: https://github.com/spanda6z/poke-rips
 
-## Core Features
-- Pack tiers (Micro → Whale)
-- Provably fair randomness via Switchboard VRF
-- On-chain order settlement + Jupiter market buys
-- `$POKE` for voting tokens into the Top 20 + odds boosts
-- Card collection with rarity system
-- Full transparency page
+## Features
+- Multiple pack tiers (Micro → Whale)
+- Provably fair randomness (Switchboard VRF)
+- On-chain orders + Jupiter market buys
+- `$POKE` for voting + odds boosts
+- Card collection + rarity system
+- Full fairness / transparency page
 
 ## Tech Stack
-- **Frontend**: Next.js 14+ (App Router), Tailwind, shadcn/ui, Framer Motion
-- **Wallet**: Solana Wallet Adapter
-- **On-chain**: Anchor + Switchboard On-Demand VRF + Pyth
-- **Swaps**: Jupiter
-- **Hosting**: Vercel (frontend) + Railway (executor)
+| Layer        | Stack                                      |
+|--------------|--------------------------------------------|
+| Frontend     | Next.js 14, Tailwind, Framer Motion, Wallet Adapter |
+| On-chain     | Anchor, Switchboard VRF, Pyth              |
+| Executor     | Node.js + Jupiter                          |
+| Hosting      | Vercel (frontend) + Railway (executor)     |
 
 ## Project Structure
 ```
 poke-rips/
-├── docs/                  # Product docs
-├── frontend/              # Next.js app
-├── programs/              # Anchor smart contracts
-├── assets/                # Brand assets & prompts
-└── README.md
+├── frontend/          # Next.js app
+├── programs/          # Anchor smart contracts
+├── executor/          # Settlement service
+├── docs/              # Architecture, tokenomics, brand
+└── assets/            # Brand assets
 ```
 
-## Quick Start (Frontend)
+## Quick Start
+
+### Frontend
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-## Roadmap
-1. Brand lock + visuals ✅
-2. Frontend MVP (Shop + Collection)
-3. Smart contract + VRF integration
-4. Executor service
-5. Token launch + vote system
-6. Mainnet
+### Executor
+```bash
+cd executor
+cp .env.example .env
+npm install
+npm run dev
+```
 
-Built for speed and iteration.
+### Smart Contract
+```bash
+cd programs
+anchor build
+anchor keys list          # update declare_id!
+anchor deploy --provider.cluster devnet
+```
+
+## Documentation
+- [Brand Kit](docs/BRAND.md)
+- [Tokenomics](docs/TOKENOMICS.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Smart Contract](docs/SMART_CONTRACT.md)
+- [Next Steps](docs/NEXT_STEPS.md)
+- [Marketing Copy](docs/MARKETING.md)
+- [Deployment](docs/DEPLOYMENT.md)
+
+## Current Status
+- Frontend MVP with rip animation: **Done**
+- Smart contract core logic: **Done**
+- Executor skeleton: **Done**
+- Real VRF + Jupiter integration: **In progress**
+- Final visuals + token launch: **Pending**
+
+Built for rapid iteration.
