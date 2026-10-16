@@ -1,0 +1,102 @@
+name: Deploy Devnet
+
+on:
+  workflow_dispatch:
+    inputs:
+      airdrop:
+        description: "Request 2 SOL airdrop before deploy"
+        type: boolean
+        default: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Solana CLI
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install Anchor 0.30.1
+        run: |
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.30.1 anchor-cli --locked --force
+          anchor --version
+
+      - name: Setup wallet from secret
+        env:
+          DEPLOYER_KEY: ${{ secrets.SOLANA_DEPLOYER_KEY }}
+        run: |
+          mkdir -p ~/.config/solana
+          if [ -z "$DEPLOYER_KEY" ]; then
+            echo "No SOLANA_DEPLOYER_KEY secret — generating ephemeral keypair"
+            solana-keygen new --no-bip39-passphrase -o ~/.config/solana/id.json --force
+          else
+            # Accept JSON array string
+            echo "$DEPLOYER_KEY" > ~/.config/solana/id.json
+          fi
+          solana config set --url https://api.devnet.solana.com
+          echo "Deployer address: $(solana address)"
+          solana balance || true
+
+      - name: Airdrop (optional)
+        if: ${{ inputs.airdrop }}
+        run: |
+          solana airdrop 2 || solana airdrop 1 || true
+          sleep 3
+          solana airdrop 2 || true
+          echo "Balance: $(solana balance)"
+
+      - name: Build
+        run: anchor build
+
+      - name: Sync program id
+        run: |
+          PROGRAM_ID=$(solana address -k target/deploy/poke_rips-keypair.json)
+          echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
+          echo "Program ID: $PROGRAM_ID"
+          sed -i "s/declare_id!(\"[^\"]*\")/declare_id!(\"$PROGRAM_ID\")/" programs/poke-rips/src/lib.rs
+          sed -i "s/poke_rips = \"[^\"]*\"/poke_rips = \"$PROGRAM_ID\"/g" Anchor.toml
+
+      - name: Rebuild with real id
+        run: anchor build
+
+      - name: Deploy to devnet
+        run: |
+          anchor deploy --provider.cluster devnet
+          echo "Deployed: $PROGRAM_ID"
+
+      - name: Upload IDL artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: poke-rips-idl
+          path: |
+            target/idl/poke_rips.json
+            target/deploy/poke_rips-keypair.json
+
+      - name: Summary
+        run: |
+          echo "### Deploy complete" >> $GITHUB_STEP_SUMMARY
+          echo "**Program ID:** \`$PROGRAM_ID\`" >> $GITHUB_STEP_SUMMARY
+          echo "**Cluster:** devnet" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployer:** $(solana address)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Next: set NEXT_PUBLIC_PROGRAM_ID in Vercel and copy IDL into executor." >> $GITHUB_STEP_SUMMARY
