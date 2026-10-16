@@ -1,0 +1,20 @@
+{
+  "name": "Poke Rips",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "features": {
+    "ghcr.io/devcontainers/features/rust:1": {
+      "version": "latest"
+    }
+  },
+  "postCreateCommand": "bash .devcontainer/setup.sh",
+  "forwardPorts": [3000],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "solana-foundation.solana-vscode"
+      ]
+    }
+  },
+  "remoteUser": "node"
+}
