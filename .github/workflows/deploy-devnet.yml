@@ -24,8 +24,9 @@ jobs:
           sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      # Pin Rust — newer toolchains break time 0.3.x used by anchor 0.30.1
+      - name: Install Rust 1.78.0
+        uses: dtolnay/rust-toolchain@1.78.0
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -33,12 +34,17 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
+            ~/.cargo/bin
             target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-anchor0301-${{ hashFiles('**/Cargo.toml') }}
 
-      - name: Install Anchor 0.30.1
+      - name: Install Anchor 0.30.1 via avm
         run: |
-          cargo install --git https://github.com/coral-xyz/anchor --tag v0.30.1 anchor-cli --locked --force
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.30.1 avm --locked --force
+          avm install 0.30.1
+          avm use 0.30.1
+          echo "$HOME/.avm/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.avm/bin:$PATH"
           anchor --version
 
       - name: Setup wallet from secret
@@ -50,7 +56,6 @@ jobs:
             echo "No SOLANA_DEPLOYER_KEY secret — generating ephemeral keypair"
             solana-keygen new --no-bip39-passphrase -o ~/.config/solana/id.json --force
           else
-            # Accept JSON array string
             echo "$DEPLOYER_KEY" > ~/.config/solana/id.json
           fi
           solana config set --url https://api.devnet.solana.com
@@ -61,15 +66,18 @@ jobs:
         if: ${{ inputs.airdrop }}
         run: |
           solana airdrop 2 || solana airdrop 1 || true
-          sleep 3
+          sleep 5
           solana airdrop 2 || true
           echo "Balance: $(solana balance)"
 
       - name: Build
-        run: anchor build
+        run: |
+          export PATH="$HOME/.avm/bin:$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          anchor build
 
       - name: Sync program id
         run: |
+          export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           PROGRAM_ID=$(solana address -k target/deploy/poke_rips-keypair.json)
           echo "PROGRAM_ID=$PROGRAM_ID" >> $GITHUB_ENV
           echo "Program ID: $PROGRAM_ID"
@@ -77,10 +85,16 @@ jobs:
           sed -i "s/poke_rips = \"[^\"]*\"/poke_rips = \"$PROGRAM_ID\"/g" Anchor.toml
 
       - name: Rebuild with real id
-        run: anchor build
+        run: |
+          export PATH="$HOME/.avm/bin:$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          anchor build
 
       - name: Deploy to devnet
         run: |
+          export PATH="$HOME/.avm/bin:$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          # Fail clearly if no SOL
+          BAL=$(solana balance | awk '{print $1}')
+          echo "Balance before deploy: $BAL SOL"
           anchor deploy --provider.cluster devnet
           echo "Deployed: $PROGRAM_ID"
 
@@ -98,5 +112,3 @@ jobs:
           echo "**Program ID:** \`$PROGRAM_ID\`" >> $GITHUB_STEP_SUMMARY
           echo "**Cluster:** devnet" >> $GITHUB_STEP_SUMMARY
           echo "**Deployer:** $(solana address)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "Next: set NEXT_PUBLIC_PROGRAM_ID in Vercel and copy IDL into executor." >> $GITHUB_STEP_SUMMARY
