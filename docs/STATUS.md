@@ -1,25 +1,29 @@
-# Poke Rips — Project Status
+# Poke Rips — Status
 
-**Last updated**: 2026-10-16
+**Updated**: 2026-10-16
 
-## Critical Change
-Switchboard shut down Sept 25, 2026.  
-Randomness provider is now **ORAO VRF**.
+## Randomness + Swaps
+| Piece | Status |
+|-------|--------|
+| Switchboard | Deprecated (shutdown) |
+| ORAO VRF helpers | Done (`executor/src/orao.ts`) |
+| Seed = sha256(order) | Done |
+| `vrf_seed` on Order | Done |
+| Jupiter swap module | Done |
+| Auto processOrder path | Done (needs live IDL + order fetch) |
 
-## Completed
-- Full product docs + marketing copy
-- Frontend with working rip UX
-- Smart contract with payment + fulfill logic
-- Executor with **working Jupiter swap module**
-- Randomness strategy updated to ORAO
+## How to test ORAO + Jupiter locally
+```bash
+cd executor
+cp .env.example .env
+# set EXECUTOR_SECRET_KEY + RPC_URL (devnet with SOL)
+npm install
+npm run dev
+```
 
-## In Progress / Next
-1. ORAO request + account parsing
-2. Auto fulfill_order from executor
-3. Token delivery to user
-4. Devnet E2E test
+Uncomment the demo `processOrder` call in `index.ts` to exercise request → wait → settle.
 
-## Run Frontend
+## Frontend
 ```bash
 cd frontend && npm install && npm run dev
 ```

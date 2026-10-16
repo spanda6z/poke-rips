@@ -12,7 +12,7 @@ pub mod poke_rips {
         fee_bps: u16,
         refund_timeout_slots: u64,
     ) -> Result<()> {
-        require!(fee_bps <= 1000, PokeError::InvalidFee); // max 10%
+        require!(fee_bps <= 1000, PokeError::InvalidFee);
 
         let config = &mut ctx.accounts.config;
         config.authority = ctx.accounts.authority.key();
@@ -41,25 +41,18 @@ pub mod poke_rips {
         Ok(())
     }
 
-    /// User pays SOL for a pack and creates an order.
-    /// Price is passed from the client (should be validated against Pyth in production).
+    /// User pays SOL and creates an order.
+    /// Client/executor then requests ORAO VRF with seed = sha256(order_pubkey).
     pub fn create_order(
         ctx: Context<CreateOrder>,
         pack_id: u8,
         price_lamports: u64,
+        vrf_seed: [u8; 32],
     ) -> Result<()> {
         let config = &ctx.accounts.config;
         require!(!config.paused, PokeError::Paused);
         require!(pack_id < 5, PokeError::InvalidPack);
         require!(price_lamports > 0, PokeError::InvalidPrice);
-
-        // Transfer SOL from user to treasury
-        let fee = price_lamports
-            .checked_mul(config.fee_bps as u64)
-            .unwrap()
-            .checked_div(10_000)
-            .unwrap();
-        let _net = price_lamports.checked_sub(fee).unwrap();
 
         system_program::transfer(
             CpiContext::new(
@@ -76,6 +69,7 @@ pub mod poke_rips {
         order.user = ctx.accounts.user.key();
         order.pack_id = pack_id;
         order.price_lamports = price_lamports;
+        order.vrf_seed = vrf_seed;
         order.status = OrderStatus::Pending as u8;
         order.rarity = 0;
         order.token_index = 0;
@@ -83,13 +77,15 @@ pub mod poke_rips {
         order.created_slot = Clock::get()?.slot;
         order.bump = ctx.bumps.order;
 
-        // TODO: Switchboard VRF request CPI
+        // Optional: CPI into ORAO request_v2 here (see docs/RANDOMNESS.md).
+        // Current design: executor/client requests ORAO off-chain with the same seed.
 
         emit!(OrderCreated {
             order: order.key(),
             user: order.user,
             pack_id,
             price_lamports,
+            vrf_seed,
         });
 
         Ok(())
@@ -140,8 +136,7 @@ pub mod poke_rips {
 
         order.status = OrderStatus::Refunded as u8;
 
-        // TODO: Transfer SOL back from treasury PDA to user.
-        // Real implementation needs treasury as a PDA with signer seeds.
+        // TODO: transfer SOL from treasury PDA back to user
 
         emit!(OrderRefunded {
             order: order.key(),
@@ -187,6 +182,7 @@ pub struct Order {
     pub user: Pubkey,
     pub pack_id: u8,
     pub price_lamports: u64,
+    pub vrf_seed: [u8; 32],
     pub status: u8,
     pub rarity: u8,
     pub token_index: u8,
@@ -212,7 +208,7 @@ pub struct InitializeConfig<'info> {
         bump
     )]
     pub config: Account<'info, Config>,
-    /// CHECK: treasury wallet that receives pack payments
+    /// CHECK: treasury receives pack payments
     pub treasury: UncheckedAccount<'info>,
     #[account(mut)]
     pub authority: Signer<'info>,
@@ -241,7 +237,7 @@ pub struct CreateOrder<'info> {
     #[account(
         init,
         payer = user,
-        space = 8 + 32 + 1 + 8 + 1 + 1 + 1 + 1 + 8 + 1,
+        space = 8 + 32 + 1 + 8 + 32 + 1 + 1 + 1 + 1 + 8 + 1,
         seeds = [b"order", user.key().as_ref(), &pack_id.to_le_bytes()],
         bump
     )]
@@ -277,6 +273,7 @@ pub struct OrderCreated {
     pub user: Pubkey,
     pub pack_id: u8,
     pub price_lamports: u64,
+    pub vrf_seed: [u8; 32],
 }
 
 #[event]

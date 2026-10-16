@@ -1,33 +1,60 @@
-# Randomness Strategy
+# Randomness Strategy — ORAO VRF
 
-## Important Update (Oct 2026)
+## Why not Switchboard?
+Switchboard shut down on **September 25, 2026**. Do not integrate it.
 
-**Switchboard shut down on September 25, 2026.**  
-All previous references to Switchboard VRF are deprecated.
+## Provider: ORAO VRF
 
-## Current Choice: ORAO VRF
+| Item | Value |
+|------|--------|
+| Classic program | `VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y` |
+| Callback program | `VRFCBePmGTpZ234BhbzNNzmyg39Rgdd6VgdfhHwKypU` |
+| Fee | ~0.001 SOL |
+| Latency | sub-second to ~20s |
+| JS SDK | `@orao-network/solana-vrf` |
+| Rust crate | `orao-solana-vrf` (feature `cpi`) |
 
-- Program (classic): `VRFzZoJdhFWL8rkvu87LpKM3RbcVezpMEc6X5GVDr7y`
-- Program (callback): `VRFCBePmGTpZ234BhbzNNzmyg39Rgdd6VgdfhHwKypU`
-- Fee: ~0.001 SOL per request
-- Latency: sub-second to ~20s
-- Model: multi-node EdDSA VRF with Byzantine quorum
-- SDK: `@orao-network/solana-vrf` + Rust crate `orao-solana-vrf`
+## Seed convention
 
-## Flow for Poke Rips
+```
+vrf_seed = sha256(order_pubkey)
+```
 
-1. User calls `create_order` and pays SOL
-2. Program (or client) requests ORAO randomness with a unique seed tied to the order
-3. ORAO nodes fulfill the randomness account
-4. Executor detects fulfilled randomness
-5. Executor calls `fulfill_order` with the 32 random bytes
-6. Contract derives rarity + token_index + value_band
-7. Executor performs Jupiter swap and sends tokens to user
+Stored on the `Order` account as `vrf_seed` so executor and client always agree.
 
-## Alternatives considered
-- Pyth Entropy (commit-reveal) — viable backup
-- Pure blockhash schemes — too weak for real money packs
+## End-to-end flow
 
-## Resources
-- https://orao.network/solana-vrf
-- https://github.com/orao-network/solana-vrf
+1. **User** calls `create_order(pack_id, price_lamports, vrf_seed)` and pays SOL
+2. **Client or Executor** calls ORAO `request(seed)` (JS: `vrf.request(seed).rpc()`)
+3. ORAO nodes fulfill the randomness account (PDA from seed)
+4. **Executor** runs `waitFulfilled(seed)` → gets 64 bytes
+5. **Executor** calls `fulfill_order(first_32_bytes)` on our program
+6. Contract sets `rarity`, `token_index`, `value_band`
+7. **Executor** Jupiter-swaps SOL → winning token and delivers to user
+
+## JS quick reference
+
+```ts
+import { Orao } from "@orao-network/solana-vrf";
+
+const vrf = new Orao(provider);
+const [seed, tx] = await vrf.request(seedBuffer).rpc();
+const result = await vrf.waitFulfilled(seed);
+// result.randomness → 64 bytes
+```
+
+## On-chain CPI (optional later)
+
+```rust
+orao_solana_vrf = { version = "0.4", default-features = false, features = ["cpi"] }
+
+// In create_order after payment:
+orao_solana_vrf::cpi::request_v2(cpi_ctx, vrf_seed)?;
+```
+
+Accounts needed: payer, network_state, treasury, request PDA, system_program.
+
+## Security notes
+- Always take payment at commit time (we do — on `create_order`)
+- Never let the user choose random bytes
+- Restrict who can call `fulfill_order` (executor key or ORAO callback)

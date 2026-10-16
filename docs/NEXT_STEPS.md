@@ -3,18 +3,19 @@
 ## Completed
 - [x] Brand, tokenomics, architecture, marketing
 - [x] Frontend MVP + rip animation + mobile nav
-- [x] Smart contract core (payments, fulfill, refund)
-- [x] Executor skeleton
-- [x] **Pivot off Switchboard → ORAO VRF**
-- [x] **Real Jupiter quote + swap helpers**
+- [x] Smart contract core (payments, fulfill, refund, vrf_seed)
+- [x] Pivot to ORAO VRF
+- [x] Jupiter quote + swap helpers
+- [x] ORAO request / wait / seed helpers in executor
+- [x] processOrder path (request → wait → derive → settle)
 
 ## Remaining
-- [ ] Wire ORAO request on create_order (client or CPI)
-- [ ] Parse ORAO RandomnessAccountData in executor
-- [ ] Call fulfill_order automatically when randomness is ready
+- [ ] Wire Anchor IDL in executor → real `fulfill_order` RPC
+- [ ] `getProgramAccounts` for Pending orders
 - [ ] Transfer swapped tokens to user ATA
+- [ ] Optional: ORAO CPI inside `create_order`
 - [ ] Treasury as PDA
 - [ ] $POKE stake + vote
 - [ ] Final pack art + logo
-- [ ] Devnet end-to-end test
+- [ ] Devnet E2E test
 - [ ] Mainnet + token launch
