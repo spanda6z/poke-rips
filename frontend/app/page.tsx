@@ -2,49 +2,7 @@
 
 import { PackCard } from "@/components/PackCard";
 import { Navbar } from "@/components/Navbar";
-
-const PACKS = [
-  {
-    id: "micro",
-    name: "Micro Pack",
-    description: "Dip a toe. Rip a real bag.",
-    minPrize: 1,
-    maxPrize: 100,
-    priceSol: 0.05,
-  },
-  {
-    id: "mini",
-    name: "Mini Pack",
-    description: "Small pack, real potential.",
-    minPrize: 5,
-    maxPrize: 250,
-    priceSol: 0.15,
-  },
-  {
-    id: "starter",
-    name: "Starter Pack",
-    description: "The classic entry.",
-    minPrize: 10,
-    maxPrize: 500,
-    priceSol: 0.35,
-  },
-  {
-    id: "degen",
-    name: "Degen Pack",
-    description: "Higher risk. Higher reward.",
-    minPrize: 25,
-    maxPrize: 1500,
-    priceSol: 1.0,
-  },
-  {
-    id: "whale",
-    name: "Whale Pack",
-    description: "For the big players.",
-    minPrize: 100,
-    maxPrize: 10000,
-    priceSol: 5.0,
-  },
-];
+import { PACKS } from "@/lib/constants";
 
 export default function ShopPage() {
   return (
@@ -52,11 +10,11 @@ export default function ShopPage() {
       <Navbar />
       <main className="max-w-6xl mx-auto px-4 py-12">
         <div className="text-center mb-12">
-          <h1 className="text-4xl md:text-5xl font-black text-poke-yellow mb-3">
+          <h1 className="text-4xl md:text-6xl font-black text-poke-yellow mb-3 tracking-tight">
             POKE RIPS
           </h1>
-          <p className="text-slate-400 text-lg">
-            Rip packs. Catch real Solana bags.
+          <p className="text-slate-400 text-lg md:text-xl max-w-xl mx-auto">
+            Rip packs. Catch real Solana bags delivered straight to your wallet.
           </p>
         </div>
 
@@ -64,6 +22,12 @@ export default function ShopPage() {
           {PACKS.map((pack) => (
             <PackCard key={pack.id} pack={pack} />
           ))}
+        </div>
+
+        <div className="mt-16 text-center">
+          <p className="text-slate-500 text-sm">
+            All rips are provably fair via Switchboard VRF. Every result is on-chain.
+          </p>
         </div>
       </main>
     </div>

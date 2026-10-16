@@ -1,6 +1,7 @@
 "use client";
 
 import { useWallet } from "@solana/wallet-adapter-react";
+import { cn } from "@/lib/utils";
 
 interface Pack {
   id: string;
@@ -9,42 +10,61 @@ interface Pack {
   minPrize: number;
   maxPrize: number;
   priceSol: number;
+  color?: string;
 }
 
 export function PackCard({ pack }: { pack: Pack }) {
   const { connected } = useWallet();
 
   return (
-    <div className="bg-poke-surface rounded-2xl border border-white/10 overflow-hidden hover:border-poke-yellow/50 transition-all group">
-      <div className="aspect-[3/4] bg-gradient-to-b from-poke-navy/40 to-poke-bg flex items-center justify-center relative">
-        <div className="w-32 h-32 rounded-full border-4 border-poke-yellow bg-gradient-to-b from-poke-yellow to-poke-red flex items-center justify-center shadow-lg shadow-poke-yellow/20">
-          <div className="w-10 h-10 rounded-full bg-white border-4 border-poke-navy" />
+    <div className="bg-poke-surface rounded-2xl border border-white/10 overflow-hidden hover:border-poke-yellow/40 transition-all duration-300 group hover:-translate-y-1">
+      {/* Pack visual */}
+      <div
+        className={cn(
+          "aspect-[3/4] relative flex items-center justify-center bg-gradient-to-b",
+          pack.color || "from-slate-800 to-slate-950"
+        )}
+      >
+        {/* Pokeball */}
+        <div className="relative w-28 h-28 rounded-full border-[5px] border-poke-yellow bg-gradient-to-b from-poke-yellow via-white to-poke-red shadow-2xl shadow-poke-yellow/20 group-hover:scale-105 transition-transform">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-full h-[5px] bg-poke-navy" />
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-9 h-9 rounded-full bg-white border-[5px] border-poke-navy" />
+          </div>
         </div>
-        <div className="absolute bottom-4 left-0 right-0 text-center">
-          <span className="text-xs font-bold tracking-widest text-poke-yellow uppercase">
+
+        {/* Tier label */}
+        <div className="absolute bottom-5 left-0 right-0 text-center">
+          <span className="text-xs font-black tracking-[0.2em] text-poke-yellow uppercase drop-shadow">
             {pack.name}
           </span>
         </div>
+
+        {/* Shine effect */}
+        <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
 
+      {/* Info */}
       <div className="p-5">
         <h3 className="font-bold text-lg mb-1">{pack.name}</h3>
         <p className="text-slate-400 text-sm mb-4">{pack.description}</p>
 
         <div className="flex justify-between text-sm mb-5">
           <div>
-            <div className="text-slate-500 text-xs">Min Prize</div>
+            <div className="text-slate-500 text-xs mb-0.5">Min Prize</div>
             <div className="font-semibold">${pack.minPrize}</div>
           </div>
           <div className="text-right">
-            <div className="text-slate-500 text-xs">Max Pull</div>
-            <div className="font-semibold text-poke-yellow">${pack.maxPrize}</div>
+            <div className="text-slate-500 text-xs mb-0.5">Max Pull</div>
+            <div className="font-semibold text-poke-yellow">${pack.maxPrize.toLocaleString()}</div>
           </div>
         </div>
 
         <button
           disabled={!connected}
-          className="w-full py-3 rounded-xl bg-poke-yellow text-black font-bold hover:bg-yellow-400 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="w-full py-3.5 rounded-xl bg-poke-yellow text-black font-bold hover:bg-yellow-400 disabled:opacity-40 disabled:cursor-not-allowed transition-colors text-sm"
         >
           {connected ? `Rip for ${pack.priceSol} SOL` : "Connect wallet to rip"}
         </button>
