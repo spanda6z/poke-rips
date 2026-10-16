@@ -1,25 +1,20 @@
 # Next Implementation Steps
 
 ## Completed
-- [x] Brand + tokenomics + architecture docs
-- [x] Full frontend MVP (Shop, Collection, Vote, Stats, Fair)
-- [x] Rip animation + card reveal
-- [x] Mobile navigation
-- [x] Smart contract core (create / fulfill / refund + payments)
-- [x] Executor skeleton with prize calculation
-- [x] Marketing copy + deployment guide
+- [x] Brand, tokenomics, architecture, marketing
+- [x] Frontend MVP + rip animation + mobile nav
+- [x] Smart contract core (payments, fulfill, refund)
+- [x] Executor skeleton
+- [x] **Pivot off Switchboard → ORAO VRF**
+- [x] **Real Jupiter quote + swap helpers**
 
-## Remaining High Priority
-- [ ] Real Switchboard On-Demand VRF CPI
-- [ ] Jupiter Quote + Swap in executor
-- [ ] Treasury as PDA (secure refunds)
-- [ ] $POKE stake + vote instructions
-- [ ] Final pack artwork + logo SVG
+## Remaining
+- [ ] Wire ORAO request on create_order (client or CPI)
+- [ ] Parse ORAO RandomnessAccountData in executor
+- [ ] Call fulfill_order automatically when randomness is ready
+- [ ] Transfer swapped tokens to user ATA
+- [ ] Treasury as PDA
+- [ ] $POKE stake + vote
+- [ ] Final pack art + logo
 - [ ] Devnet end-to-end test
-- [ ] Mainnet deploy + token launch
-
-## Nice to Have
-- [ ] Leaderboard of biggest pulls
-- [ ] Referral system
-- [ ] Sound effects on rip
-- [ ] Share card image generation
+- [ ] Mainnet + token launch

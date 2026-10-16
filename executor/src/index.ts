@@ -1,17 +1,23 @@
 /**
  * Poke Rips Executor
  *
- * Full settlement flow (skeleton with clear next steps):
+ * Settlement flow:
  * 1. Detect Pending orders
- * 2. Wait for VRF randomness
- * 3. Call fulfill_order
- * 4. Calculate prize amount from pack range + value_band
+ * 2. Wait for ORAO VRF fulfillment
+ * 3. Call fulfill_order with random bytes
+ * 4. Calculate prize USD from pack + value_band
  * 5. Jupiter swap SOL → winning token
- * 6. Transfer tokens to user
+ * 6. Transfer tokens to user (or swap directly into user ATA)
  */
 
-import { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import {
+  Connection,
+  Keypair,
+  PublicKey,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
 import * as dotenv from "dotenv";
+import { swapSolToToken, usdToLamports } from "./jupiter";
 
 dotenv.config();
 
@@ -20,12 +26,20 @@ const PROGRAM_ID = new PublicKey(
   process.env.PROGRAM_ID || "PokeRips11111111111111111111111111111111111"
 );
 
+// Demo Top 20 — replace with on-chain config.top20 reads
+const DEMO_TOP20: string[] = [
+  "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263", // BONK
+  "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm", // WIF
+  "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN",  // JUP
+  // ... fill remaining with real mints
+];
+
 const PACK_RANGES: Record<number, { min: number; max: number }> = {
-  0: { min: 1, max: 100 },      // Micro
-  1: { min: 5, max: 250 },      // Mini
-  2: { min: 10, max: 500 },     // Starter
-  3: { min: 25, max: 1500 },    // Degen
-  4: { min: 100, max: 10000 },  // Whale
+  0: { min: 1, max: 100 },
+  1: { min: 5, max: 250 },
+  2: { min: 10, max: 500 },
+  3: { min: 25, max: 1500 },
+  4: { min: 100, max: 10000 },
 };
 
 const connection = new Connection(RPC_URL, "confirmed");
@@ -43,25 +57,72 @@ const executor = loadKeypair();
 
 function calculatePrizeUsd(packId: number, valueBand: number): number {
   const range = PACK_RANGES[packId] || PACK_RANGES[0];
-  // valueBand 0-99 maps linearly across the range for now
   const t = valueBand / 99;
   return range.min + t * (range.max - range.min);
 }
 
-async function pollOrders() {
-  console.log("[poll] Scanning for pending orders...");
+/**
+ * Core settlement for one fulfilled order.
+ * Called after random bytes are known and fulfill_order has been invoked.
+ */
+async function settlePrize(params: {
+  user: PublicKey;
+  packId: number;
+  tokenIndex: number;
+  valueBand: number;
+  solPriceUsd: number;
+}) {
+  const { user, packId, tokenIndex, valueBand, solPriceUsd } = params;
 
-  // TODO implementation steps:
-  // 1. getProgramAccounts filtered by Order discriminator + status = Pending
-  // 2. For each order, check associated VRF account for revealed randomness
-  // 3. program.methods.fulfillOrder(Array.from(randomBytes)).accounts({...}).rpc()
-  // 4. Read order.rarity, order.token_index, order.value_band
-  // 5. Look up token mint from on-chain top20[token_index]
-  // 6. const usdValue = calculatePrizeUsd(order.pack_id, order.value_band)
-  // 7. Fetch Jupiter quote for usdValue worth of the token
-  // 8. Execute swap
-  // 9. Transfer resulting tokens to order.user
-  // 10. Log success + emit metrics
+  const prizeUsd = calculatePrizeUsd(packId, valueBand);
+  const tokenMint = DEMO_TOP20[tokenIndex % DEMO_TOP20.length];
+  const lamports = usdToLamports(prizeUsd, solPriceUsd);
+
+  console.log(
+    `[settle] User ${user.toBase58()} | Pack ${packId} | $${prizeUsd.toFixed(
+      2
+    )} → ${tokenMint}`
+  );
+
+  if (!process.env.EXECUTOR_SECRET_KEY) {
+    console.log("[settle] Dry-run — skipping real Jupiter swap");
+    return;
+  }
+
+  // In production you may want to:
+  // - Swap into a treasury ATA then transfer to user, OR
+  // - Build a Jupiter swap that lands directly in the user's ATA
+  // For simplicity we swap with the executor key and then transfer.
+  const sig = await swapSolToToken(
+    connection,
+    executor,
+    tokenMint,
+    lamports,
+    150 // 1.5% slippage for volatile meme tokens
+  );
+
+  console.log(`[settle] Done. Swap sig: ${sig}`);
+  // TODO: transfer received tokens to `user` if not already in their ATA
+}
+
+async function pollOrders() {
+  console.log("[poll] Scanning for pending / newly fulfilled orders...");
+
+  // TODO (ORAO integration):
+  // 1. Fetch Order accounts with status = Pending
+  // 2. For each, derive / look up the associated ORAO randomness account (seed = order key or hash)
+  // 3. Read RandomnessAccountData — if fulfilled, extract 32 bytes
+  // 4. Call program.methods.fulfillOrder(Array.from(bytes)).accounts({...}).rpc()
+  // 5. Call settlePrize({ user, packId, tokenIndex, valueBand, solPriceUsd })
+
+  // Placeholder demo call (remove in production):
+  // await settlePrize({
+  //   user: new PublicKey("..."),
+  //   packId: 0,
+  //   tokenIndex: 0,
+  //   valueBand: 50,
+  //   solPriceUsd: 150,
+  // });
 }
 
 async function main() {
@@ -69,6 +130,7 @@ async function main() {
   console.log("RPC      :", RPC_URL);
   console.log("Program  :", PROGRAM_ID.toBase58());
   console.log("Executor :", executor.publicKey.toBase58());
+  console.log("Randomness: ORAO VRF (Switchboard is deprecated)");
   console.log("---");
 
   setInterval(async () => {
