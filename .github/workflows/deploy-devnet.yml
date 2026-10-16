@@ -31,8 +31,8 @@ jobs:
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
 
-      - name: Install Rust 1.79.0
-        uses: dtolnay/rust-toolchain@1.79.0
+      - name: Install Rust 1.85.0
+        uses: dtolnay/rust-toolchain@1.85.0
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -48,7 +48,7 @@ jobs:
         run: |
           set -e
           export PATH="$HOME/.cargo/bin:$PATH"
-          # Build anchor-cli with Rust 1.79 (avoids time/edition issues)
+          # Cargo 1.85 supports Edition 2024 manifests in current transitive dependencies.
           cargo install --git https://github.com/coral-xyz/anchor --tag v0.30.1 anchor-cli --force
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           anchor --version
