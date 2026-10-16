@@ -24,7 +24,6 @@ jobs:
         with:
           node-version: "20"
 
-      # Pin Solana to 1.18.x — matches Anchor 0.30 and avoids SBF tool mismatches
       - name: Install Solana 1.18.26
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/v1.18.26/install)"
@@ -32,8 +31,8 @@ jobs:
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           solana --version
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust 1.79.0
+        uses: dtolnay/rust-toolchain@1.79.0
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -43,22 +42,14 @@ jobs:
             ~/.cargo/git
             ~/.cargo/bin
             target
-          key: ${{ runner.os }}-cargo-sbf-v2-${{ hashFiles('**/Cargo.toml') }}
+          key: ${{ runner.os }}-cargo-sbf-v3-${{ hashFiles('**/Cargo.toml') }}
 
-      # Prefer npm binary; fall back to cargo install without --locked
       - name: Install Anchor CLI
         run: |
           set -e
-          if npm install -g @coral-xyz/anchor-cli@0.30.1 2>/dev/null; then
-            echo "Installed anchor via npm"
-            which anchor || true
-            anchor --version || true
-          fi
-          if ! command -v anchor >/dev/null 2>&1; then
-            echo "npm package missing — cargo install anchor-cli"
-            cargo install --git https://github.com/coral-xyz/anchor --tag v0.30.1 anchor-cli --force
-          fi
           export PATH="$HOME/.cargo/bin:$PATH"
+          # Build anchor-cli with Rust 1.79 (avoids time/edition issues)
+          cargo install --git https://github.com/coral-xyz/anchor --tag v0.30.1 anchor-cli --force
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           anchor --version
 
@@ -69,7 +60,6 @@ jobs:
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           mkdir -p ~/.config/solana
           if [ -z "$DEPLOYER_KEY" ]; then
-            echo "No SOLANA_DEPLOYER_KEY — ephemeral keypair"
             solana-keygen new --no-bip39-passphrase -o ~/.config/solana/id.json --force
           else
             echo "$DEPLOYER_KEY" > ~/.config/solana/id.json
@@ -84,22 +74,16 @@ jobs:
           export PATH="$HOME/.local/share/solana/install/active_release/bin:$PATH"
           for i in 1 2 3 4 5; do
             solana airdrop 2 && break
-            echo "Airdrop attempt $i failed, retry..."
             sleep 8
           done
           solana balance
 
-      - name: Pin crates + build
+      - name: Build
         run: |
           set -e
           export PATH="$HOME/.cargo/bin:$HOME/.local/share/solana/install/active_release/bin:$PATH"
-          # Generate lockfile on modern cargo, then pin pre-edition2024 crates
-          cargo generate-lockfile || true
-          cargo update -p block-buffer --precise 0.10.4 2>/dev/null || true
-          cargo update -p crypto-common --precise 0.1.6 2>/dev/null || true
-          cargo update -p digest --precise 0.10.7 2>/dev/null || true
-          cargo update -p sha2 --precise 0.10.8 2>/dev/null || true
-          cargo update -p time --precise 0.3.36 2>/dev/null || true
+          # Do NOT generate host Cargo.lock (v4 breaks SBF cargo)
+          rm -f Cargo.lock programs/poke-rips/Cargo.lock
           anchor build
 
       - name: Sync program id
@@ -114,6 +98,7 @@ jobs:
       - name: Rebuild with real id
         run: |
           export PATH="$HOME/.cargo/bin:$HOME/.local/share/solana/install/active_release/bin:$PATH"
+          rm -f Cargo.lock
           anchor build
 
       - name: Deploy to devnet
