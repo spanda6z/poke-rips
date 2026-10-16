@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --poke-yellow: #FFCB05;
+  --poke-red: #EE1515;
+  --poke-navy: #003A70;
+  --poke-bg: #0B0F1A;
+  --poke-surface: #151C2C;
+}
+
+body {
+  background-color: var(--poke-bg);
+  color: #F8FAFC;
+}
